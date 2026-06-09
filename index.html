@@ -86,7 +86,11 @@ function loadS() {
 // ═══════════════════════════════════════════════════════════════
 function parseSid(sid) {
   if (!sid || sid.length !== 5 || !/^\d+$/.test(sid)) return null;
-  return { grade: sid[0], cls: sid[1], num: parseInt(sid.slice(2)) };
+  return {
+    grade: sid[0],
+    cls: parseInt(sid.slice(1, 3)),
+    num: parseInt(sid.slice(3, 5)),
+  };
 }
 function fmtSid(sid) {
   const p = parseSid(sid);
@@ -185,9 +189,9 @@ function vHome() {
   return `
     <div class="flex flex-col items-center justify-center py-16 text-center">
       <div class="text-6xl mb-3">🛠️</div>
-      <h1 class="text-3xl font-bold text-gray-800 mb-2">기술실 안전 실습 AI 앱</h1>
-      <p class="text-gray-400 mb-10">안전하게 배우고, 즐겁게 실습하자!</p>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full max-w-sm">
+      <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2 break-keep">기술실 안전 실습 AI 앱</h1>
+      <p class="text-gray-400 mb-10 text-sm sm:text-base">안전하게 배우고, 즐겁게 실습하자!</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full max-w-xs sm:max-w-sm">
         <button onclick="S.role='student';go('login')" class="bg-blue-500 hover:bg-blue-600 text-white rounded-2xl p-8 shadow-lg transition">
           <div class="text-4xl mb-2">👨‍🎓</div>
           <div class="text-lg font-bold">학생으로 시작</div>
