@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🛠️ 기술실 안전 실습</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fade-in { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .chat-bubble-user { background: #1E88E5; color: white; border-radius: 18px 18px 4px 18px; }
+    .chat-bubble-ai   { background: white; border: 1px solid #e5e7eb; border-radius: 18px 18px 18px 4px; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div id="app" class="max-w-2xl mx-auto px-4 py-6 fade-in"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const TOOLS_DATA = {
+  wood:    { name:'목공 도구',    emoji:'🪵', items:[{id:'saw',name:'톱',emoji:'🪚'},{id:'hammer',name:'망치',emoji:'🔨'},{id:'chisel',name:'끌',emoji:'🔧'},{id:'plane',name:'대패',emoji:'🪵'}] },
+  cut:     { name:'절단 도구',    emoji:'✂️', items:[{id:'cutter',name:'커터칼',emoji:'🔪'},{id:'scissors',name:'가위',emoji:'✂️'}] },
+  heat:    { name:'접합·열 도구', emoji:'🔥', items:[{id:'gluegun',name:'글루건',emoji:'🔫'},{id:'soldering',name:'납땜 인두기',emoji:'⚡'}] },
+  measure: { name:'측정 도구',    emoji:'📏', items:[{id:'ruler',name:'자',emoji:'📏'},{id:'caliper',name:'버니어캘리퍼스',emoji:'📐'}] },
+  other:   { name:'기타',         emoji:'🔩', items:[{id:'drill',name:'드릴',emoji:'🔩'},{id:'sandpaper',name:'사포',emoji:'🟫'}] },
+};
+
+const QUESTIONS = [
+  {id:'saw1',    tool:'saw',       type:'mc',     text:'톱질할 때 재료를 고정하는 올바른 방법은?',          options:['한 손으로 잡고 톱질','바이스나 클램프로 고정','발로 밟아 고정','다른 사람이 잡아줌'],       answer:1, explanation:'바이스나 클램프로 고정해야 손을 보호할 수 있습니다.'},
+  {id:'saw2',    tool:'saw',       type:'mc',     text:'톱을 사용하지 않을 때 올바른 보관 방법은?',         options:['날이 위를 향하게 올려둠','날 덮개 씌워 공구함 보관','바닥에 내려놓음','작업대 모서리에 걸쳐둠'], answer:1, explanation:'날 덮개를 씌워 공구함에 보관합니다.'},
+  {id:'saw3',    tool:'saw',       type:'essay',  text:'톱질 중 나무가 갈라졌을 때 어떻게 해야 하나요?',     modelAnswer:'톱질을 멈추고 교사에게 알린 후 클램프로 재고정한다.'},
+  {id:'hammer1', tool:'hammer',    type:'mc',     text:'망치로 못을 박을 때 처음에 해야 할 일은?',          options:['강하게 한 번에 박음','손가락으로 잡고 가볍게 두드려 세움','입으로 물고 고정','최대한 높이 들어올림'], answer:1, explanation:'가볍게 세운 뒤 손가락을 치우고 박습니다.'},
+  {id:'hammer2', tool:'hammer',    type:'mc',     text:'망치 자루가 느슨할 때 올바른 조치는?',              options:['그냥 사용','테이프로 감음','교사에게 알리고 사용 중단','더 세게 잡음'],                        answer:2, explanation:'자루가 느슨하면 즉시 사용을 중단합니다.'},
+  {id:'glue1',   tool:'gluegun',   type:'mc',     text:'글루건 핫글루가 손에 묻었을 때 응급처치는?',        options:['손 흔들어 떼냄','찬물 15분 이상 냉각','굳을 때까지 기다림','휴지로 닦음'],                   answer:1, explanation:'즉시 찬물로 15분 이상 냉각하고 교사에게 알립니다.'},
+  {id:'glue2',   tool:'gluegun',   type:'mc',     text:'글루건 사용 전 확인 사항은?',                      options:['충분히 예열(3~5분)','노즐에 손 대어 온도 확인','스틱 없이 테스트','전원 뽑고 사용'],           answer:0, explanation:'3~5분 예열 후 사용합니다.'},
+  {id:'glue3',   tool:'gluegun',   type:'essay',  text:'글루건 사용 후 안전하게 정리하는 방법을 설명하세요.',modelAnswer:'전원을 끄고 노즐이 완전히 식을 때까지 스탠드에 거치한다.'},
+  {id:'sold1',   tool:'soldering', type:'mc',     text:'납땜 인두기 사용 시 반드시 착용할 보호장비는?',     options:['두꺼운 장갑','보안경과 환기 확보','마스크만','별도 불필요'],                                   answer:1, explanation:'납땜 연기는 유해하므로 환기와 보안경이 필수입니다.'},
+  {id:'sold2',   tool:'soldering', type:'mc',     text:'납땜 인두기를 내려놓을 때 올바른 방법은?',          options:['작업대에 직접 놓음','전용 스탠드에 거치','책 위에 올림','전원 끄고 바닥에 놓음'],              answer:1, explanation:'전용 스탠드에만 거치합니다.'},
+  {id:'cut1',    tool:'cutter',    type:'mc',     text:'커터칼로 자를 때 칼날 방향은?',                    options:['몸쪽으로 당기며','몸 바깥쪽으로 밀며','방향 무관','위에서 찍듯이'],                           answer:1, explanation:'반드시 몸 바깥쪽으로 밀며 사용합니다.'},
+  {id:'cut2',    tool:'cutter',    type:'mc',     text:'커터날 교체 시 올바른 방법은?',                    options:['손가락으로 빼냄','플라이어로 빼고 날 케이스에 버림','두드려 빼냄','입으로 빼냄'],              answer:1, explanation:'플라이어로 교체하고 날 케이스에 버립니다.'},
+  {id:'drill1',  tool:'drill',     type:'mc',     text:'드릴 사용 전 반드시 확인할 사항은?',               options:['비트 단단히 고정 확인','손으로 돌려봄','전원 켜고 교체','속도 최대 설정'],                       answer:0, explanation:'척 키로 비트를 단단히 고정합니다.'},
+  {id:'drill2',  tool:'drill',     type:'mc',     text:'드릴 작업 시 재료 고정 방법은?',                   options:['손으로 잡고 드릴','클램프로 작업대에 고정','무릎으로 눌러 고정','다른 사람이 잡아줌'],          answer:1, explanation:'클램프로 고정해야 사고를 막습니다.'},
+];
+
+const AI_MOCK = [
+  {keys:['갈라','쪼개','나무'],   r:{intro:'나무 갈라짐 대처법',         steps:['톱질을 즉시 멈춥니다','클램프로 갈라진 부분을 고정합니다','교사에게 상황을 알립니다'],                        warn:null,                                    yt:'목공 재료 고정 방법'}},
+  {keys:['화상','뜨겁','불'],     r:{intro:'화상 응급처치 안내',          steps:['즉시 흐르는 찬물로 15분 이상 냉각합니다','물집을 터뜨리지 않습니다','깨끗한 거즈로 덮습니다'],              warn:'즉시 교사에게 알리고 보건실로 가세요',   yt:'화상 응급처치 방법'}},
+  {keys:['글루건','접착제'],      r:{intro:'글루건 안전 사용법',          steps:['예열(3~5분)을 기다립니다','노즐에 손이 닿지 않게 합니다','사용 후 스탠드에 거치합니다'],                     warn:'⚠️ 노즐은 매우 뜨겁습니다. 화상 주의!',  yt:'글루건 안전 사용법'}},
+  {keys:['납땜','인두기','연기'], r:{intro:'납땜 안전 수칙',              steps:['창문을 열어 환기합니다','보안경을 착용합니다','인두기는 스탠드에 거치합니다','납땜 후 손을 씻습니다'],      warn:'⚠️ 납땜 연기는 유해합니다. 반드시 환기!',yt:'납땜 인두기 안전 사용'}},
+  {keys:['톱','톱질','자르'],     r:{intro:'톱 안전 사용법',              steps:['재료를 클램프로 단단히 고정합니다','처음에는 천천히 홈을 만듭니다','몸과 일직선으로 당깁니다'],            warn:null,                                    yt:'목공 톱질 기초 방법'}},
+  {keys:['망치','못','박'],       r:{intro:'망치 안전 사용법',            steps:['못을 먼저 가볍게 세웁니다','손가락을 치운 후 박습니다','기울면 장도리로 뺀 후 재시작합니다'],              warn:null,                                    yt:'망치로 못 박는 방법'}},
+  {keys:['커터','칼','베','상처'],r:{intro:'커터 상처 응급처치',          steps:['즉시 깨끗한 천으로 지혈합니다','상처 부위를 심장보다 높이 듭니다'],                                       warn:'즉시 교사에게 알리고 보건실로 가세요',   yt:'베인 상처 응급처치'}},
+  {keys:['드릴'],                 r:{intro:'드릴 안전 사용법',            steps:['비트 고정 확인 후 시작합니다','재료를 클램프로 고정합니다','천천히 시작해 속도를 높입니다'],               warn:null,                                    yt:'전동 드릴 사용법 초보'}},
+  {keys:['다쳤','부상','피'],     r:{intro:'부상 응급 대처',              steps:['당황하지 않고 교사를 부릅니다','상처 부위를 만지지 않습니다'],                                            warn:'즉시 교사에게 알리고 보건실로 가세요',   yt:null}},
+];
+
+const DEFAULT_RESP = {
+  intro:'기술실 안전 수칙 안내',
+  steps:['작업 전 보호장비(보안경, 장갑)를 착용합니다','재료를 클램프로 단단히 고정합니다','공구를 천천히 정확하게 사용합니다','작업 후 공구를 제자리에 정리합니다'],
+  warn:null, yt:null
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+let S = {
+  role: null, currentSid: null, classActive: false,
+  selectedTools: [], students: {}, quizWrongStats: {}, chatKeyStats: {},
+  teacherAuthed: false, quizState: null,
+};
+
+function saveS() {
+  try { localStorage.setItem('safetyApp2', JSON.stringify(S)); } catch(e) {}
+}
+function loadS() {
+  try {
+    const d = localStorage.getItem('safetyApp2');
+    if (d) S = { ...S, ...JSON.parse(d) };
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════════════════
+function parseSid(sid) {
+  if (!sid || sid.length !== 5 || !/^\d+$/.test(sid)) return null;
+  return { grade: sid[0], cls: sid[1], num: parseInt(sid.slice(2)) };
+}
+function fmtSid(sid) {
+  const p = parseSid(sid);
+  return p ? `${p.grade}학년 ${p.cls}반 ${p.num}번` : '잘못된 학번';
+}
+function nowTime() { return new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}); }
+function nowDate() { return new Date().toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})+' '+nowTime(); }
+function toolName(id) {
+  for (const c of Object.values(TOOLS_DATA)) { const t = c.items.find(i=>i.id===id); if(t) return t.name; }
+  return id;
+}
+function filteredQs() {
+  return S.selectedTools.length ? QUESTIONS.filter(q=>S.selectedTools.includes(q.tool)) : QUESTIONS;
+}
+function gradeEssay(model, student) {
+  const kws = model.split(/[\s,。]+/).filter(w=>w.length>=2);
+  const hit = kws.filter(k=>student.includes(k)).length;
+  const ok = hit >= Math.max(1, Math.floor(kws.length/3));
+  return { ok, fb: ok ? '핵심 내용을 잘 포함하고 있습니다.' : '모범답안의 핵심 내용을 다시 확인하세요.' };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AI (Cloudflare Worker 프록시 → 실패시 mock)
+// ═══════════════════════════════════════════════════════════════
+async function aiChat(msg, toolNames, history) {
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, tools: toolNames, history }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    return data;
+  } catch {
+    return mockChat(msg);
+  }
+}
+
+async function aiGrade(question, modelAnswer, studentAnswer) {
+  try {
+    const res = await fetch('/api/grade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, modelAnswer, studentAnswer }),
+    });
+    if (!res.ok) throw new Error();
+    return await res.json();
+  } catch {
+    const r = gradeEssay(modelAnswer, studentAnswer);
+    return { correct: r.ok, feedback: r.fb };
+  }
+}
+
+function mockChat(msg) {
+  for (const item of AI_MOCK) {
+    if (item.keys.some(k => msg.includes(k))) return item.r;
+  }
+  return DEFAULT_RESP;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ROUTER
+// ═══════════════════════════════════════════════════════════════
+let VIEW = null;
+
+function go(view) {
+  VIEW = view;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function render() {
+  const app = document.getElementById('app');
+  app.className = 'max-w-2xl mx-auto px-4 py-6 fade-in';
+  const views = {
+    null:               vHome,
+    login:              vLogin,
+    quiz:               vQuiz,
+    license:            vLicense,
+    practice:           vPractice,
+    report:             vReport,
+    'teacher-auth':     vTeacherAuth,
+    'teacher-setup':    vTeacherSetup,
+    'teacher-dash':     vTeacherDash,
+    'teacher-stats':    vTeacherStats,
+  };
+  app.innerHTML = (views[VIEW] || vHome)();
+  saveS();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: HOME
+// ═══════════════════════════════════════════════════════════════
+function vHome() {
+  return `
+    <div class="flex flex-col items-center justify-center py-16 text-center">
+      <div class="text-6xl mb-3">🛠️</div>
+      <h1 class="text-3xl font-bold text-gray-800 mb-2">기술실 안전 실습 AI 앱</h1>
+      <p class="text-gray-400 mb-10">안전하게 배우고, 즐겁게 실습하자!</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full max-w-sm">
+        <button onclick="S.role='student';go('login')" class="bg-blue-500 hover:bg-blue-600 text-white rounded-2xl p-8 shadow-lg transition">
+          <div class="text-4xl mb-2">👨‍🎓</div>
+          <div class="text-lg font-bold">학생으로 시작</div>
+          <div class="text-xs mt-1 opacity-80">퀴즈 → 면허증 → 실습</div>
+        </button>
+        <button onclick="S.role='teacher';go(S.teacherAuthed?'teacher-setup':'teacher-auth')" class="bg-gray-700 hover:bg-gray-800 text-white rounded-2xl p-8 shadow-lg transition">
+          <div class="text-4xl mb-2">👩‍🏫</div>
+          <div class="text-lg font-bold">교사로 시작</div>
+          <div class="text-xs mt-1 opacity-80">설정 · 대시보드 · 통계</div>
+        </button>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: STUDENT LOGIN
+// ═══════════════════════════════════════════════════════════════
+function vLogin() {
+  return `
+    <div class="max-w-sm mx-auto">
+      <button onclick="S.role=null;go(null)" class="text-sm text-gray-400 hover:text-gray-600 mb-4">← 처음으로</button>
+      <h2 class="text-2xl font-bold mb-5">👨‍🎓 학생 로그인</h2>
+      ${!S.classActive ? `<div class="bg-yellow-50 border border-yellow-300 rounded-xl p-3 text-sm text-yellow-700 mb-4">⏳ 아직 수업이 시작되지 않았습니다.</div>` : ''}
+      <div class="bg-white rounded-2xl shadow p-6 space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">이름</label>
+          <input id="inp-name" type="text" placeholder="홍길동" class="w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">학번 (5자리)</label>
+          <input id="inp-sid" type="text" maxlength="5" placeholder="예) 10203" class="w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400" oninput="document.getElementById('sid-prev').textContent=parseSid(this.value)?'→ '+fmtSid(this.value):(this.value.length===5?'⚠️ 잘못된 형식':'')">
+          <p id="sid-prev" class="text-sm text-blue-500 mt-1 h-5"></p>
+        </div>
+        <p id="login-err" class="text-red-500 text-sm hidden"></p>
+        <button onclick="doLogin()" class="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-3 font-bold transition">입장하기</button>
+      </div>
+    </div>`;
+}
+
+function doLogin() {
+  const name = document.getElementById('inp-name')?.value.trim();
+  const sid  = document.getElementById('inp-sid')?.value.trim();
+  const err  = document.getElementById('login-err');
+  const show = (m) => { err.textContent=m; err.classList.remove('hidden'); };
+
+  if (!name) { show('이름을 입력하세요.'); return; }
+  if (!parseSid(sid)) { show('학번은 5자리 숫자로 입력하세요.'); return; }
+  if (S.students[sid] && S.students[sid].name !== name) { show('이미 다른 이름으로 등록된 학번입니다.'); return; }
+
+  if (!S.students[sid]) {
+    const p = parseSid(sid);
+    S.students[sid] = { sid, name, grade:p.grade, cls:p.cls, num:p.num,
+      quizScore:0, quizTotal:0, licensed:false, licenseDate:null,
+      quizWrong:[], chatLog:[], step:'quiz',
+      lastActive: Date.now()/1000, practiceStart:null, reflection:{} };
+  }
+  S.currentSid = sid;
+  S.quizState = null;
+  go('quiz');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: QUIZ
+// ═══════════════════════════════════════════════════════════════
+function vQuiz() {
+  if (!S.quizState) {
+    S.quizState = { questions: filteredQs(), current:0, score:0, wrong:[], fb:'', ok:false };
+  }
+  const qs = S.quizState;
+  const student = S.students[S.currentSid];
+
+  if (qs.current >= qs.questions.length) {
+    const pct = qs.score / qs.questions.length;
+    const pass = pct >= 0.7;
+    return `
+      <div class="max-w-sm mx-auto text-center py-8">
+        <div class="text-6xl mb-4">${pass?'🎉':'😢'}</div>
+        <h2 class="text-2xl font-bold mb-2">${pass?'퀴즈 통과!':'아쉽게도 미달'}</h2>
+        <p class="text-4xl font-bold text-blue-600 mb-1">${qs.score} / ${qs.questions.length}</p>
+        <p class="text-gray-400 mb-6">${Math.round(pct*100)}% (기준: 70%)</p>
+        ${pass
+          ? `<button onclick="doQuizPass()" class="w-full bg-blue-500 text-white rounded-xl py-3 font-bold">🏅 면허증 발급받기 →</button>`
+          : `<button onclick="S.quizState=null;go('quiz')" class="w-full bg-gray-500 text-white rounded-xl py-3 font-bold">🔄 다시 도전하기</button>`}
+      </div>`;
+  }
+
+  const q   = qs.questions[qs.current];
+  const pct = qs.current / qs.questions.length;
+
+  return `
+    <div>
+      <h2 class="text-xl font-bold mb-1">📝 안전 퀴즈 — ${student?.name}님</h2>
+      <div class="flex items-center gap-3 mb-5">
+        <div class="flex-1 bg-gray-200 rounded-full h-2">
+          <div class="bg-blue-500 h-2 rounded-full transition-all" style="width:${pct*100}%"></div>
+        </div>
+        <span class="text-sm text-gray-400">${qs.current+1}/${qs.questions.length}</span>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-6">
+        <p class="text-lg font-semibold mb-5">Q${qs.current+1}. ${q.text}</p>
+        ${q.type==='mc' ? (qs.fb ? '' : q.options.map((o,i)=>`
+          <button onclick="doMCAnswer(${i})" class="w-full text-left border hover:bg-blue-50 rounded-xl px-4 py-3 mb-2 transition">${String.fromCharCode(9312+i)} ${o}</button>
+        `).join('')) : (qs.fb ? '' : `
+          <textarea id="essay-in" rows="4" placeholder="답변을 입력하세요..." class="w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3"></textarea>
+          <button onclick="doEssaySubmit()" class="w-full bg-blue-500 text-white rounded-xl py-3 font-bold">제출</button>
+        `)}
+        ${qs.fb ? `
+          <div class="p-4 rounded-xl ${qs.ok?'bg-green-50 text-green-800':'bg-red-50 text-red-800'} text-sm mb-4">${qs.fb}</div>
+          <button onclick="doNextQ()" class="w-full bg-blue-500 text-white rounded-xl py-3 font-bold">다음 문제 →</button>
+        ` : ''}
+      </div>
+    </div>`;
+}
+
+function doMCAnswer(i) {
+  const qs = S.quizState;
+  const q  = qs.questions[qs.current];
+  const ok = i === q.answer;
+  if (ok) { qs.score++; qs.fb=`✅ 정답! ${q.explanation}`; }
+  else { qs.wrong.push(q.id); qs.fb=`❌ 오답. 정답: <strong>${q.options[q.answer]}</strong><br><small>${q.explanation}</small>`; S.quizWrongStats[q.id]=(S.quizWrongStats[q.id]||0)+1; }
+  qs.ok = ok; render();
+}
+
+async function doEssaySubmit() {
+  const ans = document.getElementById('essay-in')?.value.trim();
+  if (!ans) return;
+  const qs = S.quizState;
+  const q  = qs.questions[qs.current];
+  const btn = document.querySelector('#essay-in + button');
+  if (btn) { btn.disabled=true; btn.textContent='채점 중...'; }
+  const res = await aiGrade(q.text, q.modelAnswer, ans);
+  if (res.correct) { qs.score++; qs.fb=`✅ ${res.feedback}`; }
+  else { qs.wrong.push(q.id); qs.fb=`❌ ${res.feedback}<br><small>모범: ${q.modelAnswer}</small>`; S.quizWrongStats[q.id]=(S.quizWrongStats[q.id]||0)+1; }
+  qs.ok = res.correct; render();
+}
+
+function doNextQ() { S.quizState.current++; S.quizState.fb=''; S.quizState.ok=false; render(); }
+
+function doQuizPass() {
+  const qs = S.quizState;
+  const s  = S.students[S.currentSid];
+  s.quizScore = qs.score; s.quizTotal = qs.questions.length;
+  s.quizWrong = qs.wrong; s.licensed = true; s.licenseDate = nowDate(); s.step='license';
+  S.quizState = null; go('license');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: LICENSE
+// ═══════════════════════════════════════════════════════════════
+function vLicense() {
+  const s = S.students[S.currentSid];
+  const tools = S.selectedTools.map(toolName).join(', ') || '일반 공구';
+  return `
+    <div class="max-w-sm mx-auto">
+      <div class="border-4 border-blue-400 rounded-2xl p-8 bg-gradient-to-br from-blue-50 to-white text-center shadow-xl mb-6">
+        <div class="text-5xl mb-2">🏅</div>
+        <h2 class="text-2xl font-bold text-blue-700">기술실 안전 실습 면허증</h2>
+        <hr class="my-3 border-blue-200">
+        <p class="text-2xl font-bold">${s?.name}</p>
+        <p class="text-gray-400 text-sm">${fmtSid(S.currentSid)}</p>
+        <p class="mt-3 text-sm"><strong>오늘 실습 공구</strong><br>${tools}</p>
+        <p class="mt-2 text-sm">퀴즈 점수: <strong>${s?.quizScore} / ${s?.quizTotal}</strong></p>
+        <p class="text-gray-300 text-xs mt-2">취득일시: ${s?.licenseDate}</p>
+        <span class="inline-block bg-blue-500 text-white px-5 py-1 rounded-full text-sm font-bold mt-3">✅ 안전 실습 인증 완료</span>
+      </div>
+      <button onclick="doStartPractice()" class="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-3 font-bold text-lg transition">🔧 실습 시작하기 →</button>
+    </div>`;
+}
+
+function doStartPractice() {
+  const s = S.students[S.currentSid];
+  s.step='practice'; s.practiceStart=Date.now()/1000; go('practice');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: PRACTICE
+// ═══════════════════════════════════════════════════════════════
+function vPractice() {
+  const s = S.students[S.currentSid];
+  s.lastActive = Date.now()/1000;
+  const log = s.chatLog || [];
+  const tools = S.selectedTools.map(toolName).join(', ') || '일반 공구';
+
+  const msgs = log.map(e=>`
+    <div class="flex justify-end mb-3">
+      <div class="chat-bubble-user px-4 py-2 max-w-xs text-sm">
+        <span class="text-xs opacity-60 block mb-0.5">${e.time}</span>${e.msg}
+      </div>
+    </div>
+    ${e.resp ? `
+    <div class="flex justify-start mb-4">
+      <div class="chat-bubble-ai px-4 py-3 max-w-sm shadow-sm text-sm">
+        <p class="font-bold text-blue-700 mb-2">${e.resp.intro}</p>
+        <ol class="space-y-1">
+          ${(e.resp.steps||[]).map((st,i)=>`<li class="flex gap-2"><span class="text-blue-400 font-bold flex-shrink-0">${i+1}.</span><span>${st}</span></li>`).join('')}
+        </ol>
+        ${e.resp.warn||e.resp.warning ? `<div class="mt-2 bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 text-yellow-800 text-xs">⚠️ ${e.resp.warn||e.resp.warning}</div>` : ''}
+        ${(e.resp.yt||e.resp.youtube_query) ? `<a href="https://www.youtube.com/results?search_query=${encodeURIComponent(e.resp.yt||e.resp.youtube_query)}" target="_blank" class="inline-block mt-2 bg-red-500 text-white text-xs px-3 py-1 rounded-full">▶ YouTube</a>` : ''}
+      </div>
+    </div>` : ''}
+  `).join('');
+
+  return `
+    <div class="flex flex-col" style="min-height:85vh">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <h2 class="text-xl font-bold">🔧 실습 중 — ${s?.name}님</h2>
+          <p class="text-xs text-gray-400">오늘 공구: ${tools}</p>
+        </div>
+        <button onclick="s.step='report';S.students[S.currentSid]=s;go('report')" class="bg-green-500 text-white text-sm px-4 py-2 rounded-xl">실습 완료 ✅</button>
+      </div>
+
+      <div id="chat-area" class="flex-1 bg-gray-50 rounded-2xl p-4 mb-3 overflow-y-auto" style="max-height:55vh">
+        ${log.length ? msgs : `<p class="text-gray-300 text-sm text-center mt-10">💡 아래에 질문을 입력하면 AI가 단계별 안내를 해줍니다.</p>`}
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-3 flex gap-2">
+        <button onclick="doSTT()" id="stt-btn" class="bg-gray-100 hover:bg-gray-200 rounded-xl px-3 py-2 text-lg flex-shrink-0" title="음성 입력">🎤</button>
+        <input id="chat-in" type="text" placeholder="예: 톱날이 걸렸어요" class="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" onkeydown="if(event.key==='Enter')doChatSend()">
+        <button id="send-btn" onclick="doChatSend()" class="bg-blue-500 text-white rounded-xl px-4 py-2 font-bold text-sm">전송</button>
+      </div>
+    </div>
+    <script>
+      const ca = document.getElementById('chat-area');
+      if(ca) ca.scrollTop = ca.scrollHeight;
+    <\/script>`;
+}
+
+async function doChatSend() {
+  const input = document.getElementById('chat-in');
+  const msg   = input?.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const btn = document.getElementById('send-btn');
+  if (btn) { btn.disabled=true; btn.textContent='...'; }
+
+  const s = S.students[S.currentSid];
+  const toolNames = S.selectedTools.map(toolName);
+  const history = (s.chatLog||[]).flatMap(e=>[
+    {role:'user', content: e.msg},
+    ...(e.resp ? [{role:'assistant', content: JSON.stringify(e.resp)}] : [])
+  ]);
+
+  const resp = await aiChat(msg, toolNames, history);
+  s.chatLog = [...(s.chatLog||[]), { time: nowTime(), msg, resp }];
+  s.lastActive = Date.now()/1000;
+
+  msg.split(/\s+/).filter(w=>w.length>=2).forEach(w=>{
+    S.chatKeyStats[w] = (S.chatKeyStats[w]||0)+1;
+  });
+
+  render();
+}
+
+function doSTT() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('크롬 브라우저에서만 음성 입력이 지원됩니다.'); return; }
+  const rec = new SR();
+  rec.lang = 'ko-KR';
+  const btn = document.getElementById('stt-btn');
+  if (btn) { btn.textContent='🔴'; btn.classList.add('animate-pulse'); }
+  rec.onresult = e => {
+    const t = e.results[0][0].transcript;
+    const inp = document.getElementById('chat-in');
+    if (inp) inp.value = t;
+    if (btn) { btn.textContent='🎤'; btn.classList.remove('animate-pulse'); }
+  };
+  rec.onerror = () => { if(btn){btn.textContent='🎤';btn.classList.remove('animate-pulse');} };
+  rec.start();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: REPORT
+// ═══════════════════════════════════════════════════════════════
+function vReport() {
+  const s = S.students[S.currentSid];
+  if (s?.reflection?.submittedAt) {
+    const r = s.reflection;
+    return `
+      <div class="max-w-sm mx-auto text-center">
+        <div class="text-5xl mb-3">🌟</div>
+        <h2 class="text-2xl font-bold mb-4">실습 완료!</h2>
+        <div class="grid grid-cols-3 gap-3 mb-5">
+          <div class="bg-blue-50 rounded-xl p-3"><p class="text-xs text-gray-400">퀴즈</p><p class="font-bold">${s.quizScore}/${s.quizTotal}</p></div>
+          <div class="bg-green-50 rounded-xl p-3"><p class="text-xs text-gray-400">AI 질문</p><p class="font-bold">${(s.chatLog||[]).length}회</p></div>
+          <div class="bg-yellow-50 rounded-xl p-3"><p class="text-xs text-gray-400">면허</p><p class="font-bold">${s.licensed?'✅':'❌'}</p></div>
+        </div>
+        <div class="bg-white rounded-2xl shadow p-5 text-left text-sm space-y-2 mb-5">
+          <p><strong>어려웠던 점:</strong> ${r.q1}</p>
+          <p><strong>해결 방법:</strong> ${r.q2}</p>
+          <p><strong>다음 목표:</strong> ${r.q3}</p>
+        </div>
+        <p class="text-gray-400 text-sm">교사에게 완료 확인을 받으세요. 수고했습니다! 👏</p>
+      </div>`;
+  }
+  return `
+    <div class="max-w-sm mx-auto">
+      <h2 class="text-2xl font-bold mb-2">📋 성찰 리포트</h2>
+      <p class="text-gray-400 text-sm mb-5">오늘 실습을 돌아보며 세 가지 질문에 답해 주세요.</p>
+      <div class="bg-white rounded-2xl shadow p-6 space-y-4">
+        <div><label class="block text-sm font-semibold mb-1">1️⃣ 오늘 어렵거나 실수했던 점은?</label>
+          <textarea id="r1" rows="3" class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="예: 톱질할 때 선이 자꾸 틀어졌어요."></textarea></div>
+        <div><label class="block text-sm font-semibold mb-1">2️⃣ AI나 친구의 도움으로 어떻게 해결했나요?</label>
+          <textarea id="r2" rows="3" class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="예: AI가 클램프로 고정하라고 알려줬어요."></textarea></div>
+        <div><label class="block text-sm font-semibold mb-1">3️⃣ 다음 실습에서 더 잘하고 싶은 점은?</label>
+          <textarea id="r3" rows="3" class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="예: 먹줄을 더 정확히 긋겠습니다."></textarea></div>
+        <p id="r-err" class="text-red-500 text-sm hidden">세 가지 질문 모두 답변해 주세요.</p>
+        <button onclick="doReportSubmit()" class="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-3 font-bold transition">제출하기 ✅</button>
+      </div>
+    </div>`;
+}
+
+function doReportSubmit() {
+  const q1=document.getElementById('r1')?.value.trim();
+  const q2=document.getElementById('r2')?.value.trim();
+  const q3=document.getElementById('r3')?.value.trim();
+  if(!q1||!q2||!q3){document.getElementById('r-err')?.classList.remove('hidden');return;}
+  S.students[S.currentSid].reflection={q1,q2,q3,submittedAt:nowDate()};
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: TEACHER AUTH
+// ═══════════════════════════════════════════════════════════════
+function vTeacherAuth() {
+  return `
+    <div class="max-w-sm mx-auto">
+      <button onclick="S.role=null;go(null)" class="text-sm text-gray-400 hover:text-gray-600 mb-4">← 처음으로</button>
+      <h2 class="text-2xl font-bold mb-5">🔒 교사 인증</h2>
+      <div class="bg-white rounded-2xl shadow p-6 space-y-4">
+        <input id="pw" type="password" placeholder="교사 비밀번호" class="w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-400" onkeydown="if(event.key==='Enter')doTeacherAuth()">
+        <p id="pw-err" class="text-red-500 text-sm hidden">비밀번호가 틀렸습니다.</p>
+        <button onclick="doTeacherAuth()" class="w-full bg-gray-700 hover:bg-gray-800 text-white rounded-xl py-3 font-bold transition">확인</button>
+        <p class="text-xs text-gray-300 text-center">기본: teacher1234</p>
+      </div>
+    </div>`;
+}
+
+function doTeacherAuth() {
+  const pw = document.getElementById('pw')?.value;
+  if (pw === 'teacher1234') { S.teacherAuthed=true; go('teacher-setup'); }
+  else document.getElementById('pw-err')?.classList.remove('hidden');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: TEACHER SETUP
+// ═══════════════════════════════════════════════════════════════
+function vTeacherSetup() {
+  const sel = new Set(S.selectedTools);
+  const catHtml = Object.entries(TOOLS_DATA).map(([,cat])=>`
+    <div class="mb-3">
+      <p class="text-sm font-semibold text-gray-600 mb-2">${cat.emoji} ${cat.name}</p>
+      <div class="flex flex-wrap gap-2">
+        ${cat.items.map(item=>`
+          <label class="flex items-center gap-1.5 border rounded-xl px-3 py-2 cursor-pointer text-sm transition ${sel.has(item.id)?'border-blue-400 bg-blue-50':'bg-white hover:bg-gray-50'}">
+            <input type="checkbox" onchange="doToolToggle('${item.id}')" ${sel.has(item.id)?'checked':''} class="accent-blue-500">
+            ${item.emoji} ${item.name}
+          </label>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  const fq = filteredQs();
+  const qHtml = fq.map((q,i)=>`
+    <div class="border rounded-xl p-3 text-sm mb-2">
+      <p class="font-medium mb-1">${i+1}. [${q.type==='mc'?'객관식':'서술형'}] ${q.text}</p>
+      ${q.type==='mc'?q.options.map((o,j)=>`<p class="text-gray-400 ml-3">${j===q.answer?'✅':'　'}${String.fromCharCode(9312+j)} ${o}</p>`).join(''):`<p class="text-gray-400 ml-3">모범: ${q.modelAnswer}</p>`}
+    </div>
+  `).join('');
+
+  return `
+    <div>
+      ${teacherTabs('setup')}
+      <h2 class="text-xl font-bold mb-4">⚙️ 수업 설정</h2>
+      <div class="bg-white rounded-2xl shadow p-5 mb-4">
+        <h3 class="font-bold mb-3">1. 오늘 사용할 공구 선택</h3>
+        ${catHtml}
+        ${S.selectedTools.length ? `<p class="text-green-600 text-sm mt-2">✅ 선택: ${S.selectedTools.map(toolName).join(', ')}</p>` : `<p class="text-yellow-600 text-sm mt-2">공구를 하나 이상 선택하세요.</p>`}
+      </div>
+      <div class="bg-white rounded-2xl shadow p-5 mb-4">
+        <h3 class="font-bold mb-3">2. 출제 문제 미리보기 (${fq.length}문제)</h3>
+        <div class="max-h-60 overflow-y-auto">${qHtml||'<p class="text-gray-300 text-sm">선택된 공구 문제 없음</p>'}</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-5">
+        <h3 class="font-bold mb-3">3. 수업 상태</h3>
+        ${S.classActive
+          ? `<p class="text-green-600 font-semibold mb-3">🟢 수업 진행 중</p>
+             <button onclick="S.classActive=false;render()" class="w-full bg-red-50 text-red-600 border border-red-200 rounded-xl py-2 font-bold">⏹ 수업 종료</button>`
+          : `<button onclick="doClassStart()" class="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-3 font-bold transition">🚀 수업 시작</button>`}
+      </div>
+    </div>`;
+}
+
+function doToolToggle(id) {
+  const idx = S.selectedTools.indexOf(id);
+  if (idx>=0) S.selectedTools.splice(idx,1); else S.selectedTools.push(id);
+  render();
+}
+function doClassStart() {
+  if (!S.selectedTools.length) { alert('공구를 하나 이상 선택하세요.'); return; }
+  S.classActive=true; S.students={}; render();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: TEACHER DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+function vTeacherDash() {
+  const all = Object.values(S.students);
+  const now = Date.now()/1000;
+  const STALE = 180;
+  const staleList = all.filter(s=>now-(s.lastActive||now)>STALE);
+
+  const cards = all.sort((a,b)=>a.sid.localeCompare(b.sid)).map(s=>{
+    const stale = now-(s.lastActive||now)>STALE;
+    const lbl   = {quiz:'📝 퀴즈 중',license:'🏅 면허 발급',practice:'🔧 실습 중',report:'📋 리포트'}[s.step]||'?';
+    const recent= (s.chatLog||[]).slice(-2).map(e=>`<p class="text-xs text-gray-400 truncate">• ${e.msg}</p>`).join('');
+    return `
+      <div class="bg-white border-2 ${stale?'border-red-400':'border-gray-100'} rounded-2xl p-4 shadow-sm">
+        <div class="flex justify-between items-start mb-1">
+          <p class="font-bold text-sm">${stale?'⚠️ ':''}${s.name}</p>
+          <span class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">${lbl}</span>
+        </div>
+        <p class="text-xs text-gray-400 mb-1">${fmtSid(s.sid)}</p>
+        ${s.licensed?`<p class="text-xs text-green-600">🏅 ${s.licenseDate}</p>`:''}
+        <p class="text-xs text-gray-400">💬 AI질문 ${(s.chatLog||[]).length}회</p>
+        ${recent}
+      </div>`;
+  }).join('');
+
+  return `
+    <div>
+      ${teacherTabs('dash')}
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">📊 실시간 대시보드</h2>
+        <button onclick="render()" class="text-sm text-blue-500 border border-blue-200 rounded-xl px-3 py-1">🔄 새로고침</button>
+      </div>
+      <div class="grid grid-cols-5 gap-2 mb-4 text-center">
+        ${[['전체',all.length,'blue'],['면허',all.filter(s=>s.licensed).length,'green'],['실습',all.filter(s=>s.step==='practice').length,'purple'],['제출',all.filter(s=>s.reflection?.submittedAt).length,'indigo'],['⚠️정체',staleList.length,'red']].map(([l,v,c])=>
+          `<div class="bg-${c}-50 rounded-xl p-2"><p class="text-xs text-gray-400">${l}</p><p class="font-bold text-${c}-600 text-lg">${v}</p></div>`
+        ).join('')}
+      </div>
+      ${staleList.length?`<div class="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm mb-4">⚠️ 3분 이상 활동 없음: ${staleList.map(s=>s.name).join(', ')}</div>`:''}
+      ${!all.length?`<p class="text-center text-gray-300 py-12">아직 접속한 학생이 없습니다.</p>`:`<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${cards}</div>`}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW: TEACHER STATS
+// ═══════════════════════════════════════════════════════════════
+function vTeacherStats() {
+  const all = Object.values(S.students);
+  const qMap = Object.fromEntries(QUESTIONS.map(q=>[q.id, q.text.slice(0,20)+'…']));
+
+  const bar = (data, color) => {
+    const top = Object.entries(data).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const max = top[0]?.[1]||1;
+    return top.map(([k,v])=>`
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs text-gray-500 w-32 truncate">${qMap[k]||k}</span>
+        <div class="flex-1 bg-gray-100 rounded-full h-5">
+          <div class="bg-${color}-400 h-5 rounded-full flex items-center justify-end pr-2" style="width:${v/max*100}%">
+            <span class="text-xs text-white font-bold">${v}</span>
+          </div>
+        </div>
+      </div>`).join('') || '<p class="text-gray-300 text-sm">데이터 없음</p>';
+  };
+
+  const rows = all.sort((a,b)=>a.sid.localeCompare(b.sid)).map(s=>`
+    <tr class="border-b text-sm hover:bg-gray-50">
+      <td class="py-2 px-2">${s.sid}</td><td class="py-2 px-2">${s.name}</td>
+      <td class="py-2 px-2">${s.quizScore||0}/${s.quizTotal||0}</td>
+      <td class="py-2 px-2">${s.licensed?'✅':'❌'}</td>
+      <td class="py-2 px-2">${(s.chatLog||[]).length}</td>
+      <td class="py-2 px-2">${s.reflection?.submittedAt?'✅':'❌'}</td>
+    </tr>`).join('');
+
+  return `
+    <div>
+      ${teacherTabs('stats')}
+      <h2 class="text-xl font-bold mb-4">📈 수업 통계</h2>
+      <div class="bg-white rounded-2xl shadow p-5 mb-4">
+        <h3 class="font-bold mb-3">❌ 많이 틀린 문제 Top 5</h3>
+        ${bar(S.quizWrongStats,'red')}
+      </div>
+      <div class="bg-white rounded-2xl shadow p-5 mb-4">
+        <h3 class="font-bold mb-3">💬 많이 질문한 키워드 Top 5</h3>
+        ${bar(S.chatKeyStats,'blue')}
+      </div>
+      <div class="bg-white rounded-2xl shadow p-5">
+        <h3 class="font-bold mb-3">👨‍🎓 학생별 이력</h3>
+        ${!all.length?'<p class="text-gray-300 text-sm">데이터 없음</p>':`
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50 text-xs text-gray-400"><tr>
+                <th class="py-2 px-2 text-left">학번</th><th class="py-2 px-2 text-left">이름</th>
+                <th class="py-2 px-2 text-left">퀴즈</th><th class="py-2 px-2 text-left">면허</th>
+                <th class="py-2 px-2 text-left">AI질문</th><th class="py-2 px-2 text-left">성찰</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <button onclick="doCSV()" class="mt-3 bg-gray-100 hover:bg-gray-200 rounded-xl px-4 py-2 text-sm">📥 CSV 다운로드</button>`}
+      </div>
+    </div>`;
+}
+
+function doCSV() {
+  const all = Object.values(S.students);
+  const hdr = ['학번','이름','학년','반','번호','퀴즈점수','퀴즈총수','면허','취득일시','AI질문수','성찰제출'];
+  const rows = all.map(s=>[s.sid,s.name,s.grade,s.cls,s.num,s.quizScore||0,s.quizTotal||0,s.licensed?'Y':'N',s.licenseDate||'',(s.chatLog||[]).length,s.reflection?.submittedAt?'Y':'N']);
+  const csv = [hdr,...rows].map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download = 'students.csv'; a.click();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SHARED UI
+// ═══════════════════════════════════════════════════════════════
+function teacherTabs(active) {
+  const tabs = [['setup','⚙️ 설정','teacher-setup'],['dash','📊 대시보드','teacher-dash'],['stats','📈 통계','teacher-stats']];
+  return `
+    <div class="flex gap-2 mb-5 flex-wrap">
+      ${tabs.map(([id,label,view])=>`
+        <button onclick="go('${view}')" class="text-sm px-4 py-2 rounded-xl font-medium transition ${active===id?'bg-blue-500 text-white':'bg-white border text-gray-500 hover:bg-gray-50'}">${label}</button>
+      `).join('')}
+      <button onclick="S.teacherAuthed=false;S.role=null;go(null)" class="ml-auto text-sm px-3 py-2 rounded-xl bg-gray-100 text-gray-500">로그아웃</button>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+loadS();
+if (S.currentSid && S.students[S.currentSid]) {
+  const step = S.students[S.currentSid].step;
+  go(step === 'practice' ? 'practice' : step === 'report' ? 'report' : step === 'license' ? 'license' : 'quiz');
+} else if (S.teacherAuthed) {
+  go('teacher-setup');
+} else {
+  go(null);
+}
+</script>
+</body>
+</html>
